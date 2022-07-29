@@ -12,8 +12,18 @@
 
 #include "rtpi_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef union pi_mutex pi_mutex_t;
 typedef union pi_cond pi_cond_t;
+
+#ifdef __cplusplus
+#define RESTRICT __restrict
+#else
+#define RESTRICT restrict
+#endif
 
 /*
  * PI Mutex Interface
@@ -59,10 +69,16 @@ int pi_cond_destroy(pi_cond_t *cond);
 int pi_cond_wait(pi_cond_t *cond, pi_mutex_t *mutex);
 
 int pi_cond_timedwait(pi_cond_t *cond, pi_mutex_t *mutex,
-		      const struct timespec *restrict abstime);
+		      const struct timespec *RESTRICT abstime);
 
 int pi_cond_signal(pi_cond_t *cond, pi_mutex_t *mutex);
 
 int pi_cond_broadcast(pi_cond_t *cond, pi_mutex_t *mutex);
+
+#undef RESTRICT
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif // RTPI_H
