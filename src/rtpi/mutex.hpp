@@ -41,6 +41,8 @@ class mutex {
 	// Not copy-assignable.
 	const mutex &operator=(const mutex &) = delete;
 
+	// Locks the mutex. If another thread has already locked the mutex,
+	// a call to lock will block execution until the lock is acquired.
 	void lock()
 	{
 		int e = pi_mutex_lock(&m);
@@ -50,6 +52,8 @@ class mutex {
 				std::error_code(e, std::generic_category()));
 	}
 
+	// Tries to lock the mutex. Returns immediately. On successful lock
+	// acquisition returns true, otherwise returns false.
 	bool try_lock()
 	{
 		// can return EBUSY or EDEADLOCK
@@ -60,7 +64,10 @@ class mutex {
 	void unlock()
 	{
 		pi_mutex_unlock(&m);
-		// Mutex requirement states that unlock does not throw exceptions.
+
+		// pi_mutex_unlock might fail (EPERM, or errno from futex)
+		// but the Mutex requirement states that unlock does not
+		// throw exceptions.
 	}
 
 	// Returns the underlying implementation-defined native handle object.
