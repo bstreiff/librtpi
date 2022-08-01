@@ -17,7 +17,14 @@ union pi_mutex {
 	__u8 pad[64];
 } __attribute__ ((aligned(64)));
 
+#ifndef __cplusplus
 #define PI_MUTEX_INIT(f) { .futex = 0, .flags = f }
+#else
+inline constexpr pi_mutex PI_MUTEX_INIT(__u32 f) {
+	pi_mutex p{ 0, f };
+	return p;
+}
+#endif
 
 /*
  * PI Cond
@@ -34,6 +41,7 @@ union pi_cond {
 	__u8 pad[128];
 } __attribute__ ((aligned(64)));
 
+#ifndef __cplusplus
 #define PI_COND_INIT(f) \
 	{ .priv_mut = PI_MUTEX_INIT(f) \
 	, .cond = 0 \
@@ -41,5 +49,11 @@ union pi_cond {
 	, .wake_id = 0 \
 	, .pending_wake = 0 \
 	, .pending_wait = 0 }
+#else
+inline constexpr pi_cond PI_COND_INIT(__u32 f) {
+	pi_cond c{ PI_MUTEX_INIT(f), 0, f, 0, 0, 0 };
+	return c;
+}
+#endif
 
 #endif // RPTI_H_INTERNAL_H

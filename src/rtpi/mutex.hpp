@@ -25,13 +25,8 @@ class mutex {
 	typedef pi_mutex *native_handle_type;
 
 	// Constructs the mutex. The mutex is in unlocked state after the constructor completes.
-	//constexpr mutex() noexcept : m(PI_MUTEX_INIT(0))
-	//{
-	//
-	//}
-	mutex() noexcept
+	constexpr mutex() noexcept : m(PI_MUTEX_INIT(0))
 	{
-		pi_mutex_init(&m, 0);
 	}
 
 	// Copy constructor is deleted.

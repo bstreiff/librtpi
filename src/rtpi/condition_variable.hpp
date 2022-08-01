@@ -36,12 +36,8 @@ class condition_variable {
 	typedef pi_cond_t *native_handle_type;
 
 	// Constructs the condition_variable. The condition_variable is in unlocked state after the constructor completes.
-	//constexpr condition_variable() noexcept : m(PI_COND_INIT(0))
-	//{
-	//}
-	condition_variable() noexcept
+	constexpr condition_variable() noexcept : c(PI_COND_INIT(0))
 	{
-		pi_cond_init(&c, 0);
 	}
 
 	// Copy constructor is deleted.
