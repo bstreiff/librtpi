@@ -3,16 +3,14 @@
 #ifndef RTPI_CONDITION_VARIABLE_HPP
 #define RTPI_CONDITION_VARIABLE_HPP
 
-#include <mutex>
 #include <chrono>
 #include <condition_variable>
 
 #include "rtpi.h"
+#include "rtpi/mutex.hpp"
 
 namespace rtpi
 {
-//using std::cv_status = cv_status;
-
 // The condition_variable class is a synchronization primitive that can be
 // used to block a thread, or multiple threads at the same time, until
 // another thread both modifies a shared variable (the condition), and
@@ -25,12 +23,11 @@ namespace rtpi
 // rtpi::condition_variable works only with std::unique_lock<rtpi::mutex>.
 //
 
+using std::cv_status;
+
 class condition_variable {
     private:
 	pi_cond_t c;
-
-	//using std::chrono::steady_clock = steady_clock;
-	//using std::chrono::system_clock = system_clock;
 
     public:
 	typedef pi_cond_t *native_handle_type;
@@ -96,9 +93,8 @@ class condition_variable {
 	// spuriously. When unblocked, regardless of the reason, lock is
 	// reacquired and wait_for() exits.
 	template <class Clock, class Period>
-	std::cv_status
-	wait_for(std::unique_lock<rtpi::mutex> &lock,
-		 const std::chrono::duration<Clock, Period> &rel_time)
+	cv_status wait_for(std::unique_lock<rtpi::mutex> &lock,
+			   const std::chrono::duration<Clock, Period> &rel_time)
 	{
 		using duration = std::chrono::steady_clock::duration;
 		auto relative_time =
@@ -133,25 +129,42 @@ class condition_variable {
 	// the absolute time point timeout_time is reached. It may also be
 	// unblocked spuriously. When unblocked, regardless of the reason,
 	// lock is reacquired and wait_until exits.
+	template <class Duration>
+	cv_status
+	wait_until(std::unique_lock<rtpi::mutex> &lock,
+		   const std::chrono::time_point<std::chrono::steady_clock,
+						 Duration> &timeout_time)
+	{
+		return wait_until_impl(lock, timeout_time);
+	}
+
 	template <class Clock, class Duration>
-	std::cv_status
+	cv_status
 	wait_until(std::unique_lock<rtpi::mutex> &lock,
 		   const std::chrono::time_point<Clock, Duration> &timeout_time)
 	{
-		auto s = std::chrono::time_point_cast<std::chrono::seconds>(
-			timeout_time);
-		auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-			timeout_time - s);
+		using std::chrono::steady_clock;
 
-		struct timespec ts = { static_cast<std::time_t>(
-					       s.time_since_epoch().count()),
-				       static_cast<long>(ns.count()) };
+		const typename Clock::time_point user_clock_entry =
+			Clock::now();
+		const typename steady_clock::time_point steady_clock_entry =
+			steady_clock::now();
 
-		pi_cond_timedwait(&c, lock.mutex()->native_handle(), &ts);
+		const auto delta = timeout_time - user_clock_entry;
+		const auto steady_timeout_time = steady_clock_entry + delta;
 
-		return (std::chrono::system_clock::now() < timeout_time ?
-				      std::cv_status::no_timeout :
-				      std::cv_status::timeout);
+		if (wait_until_impl(lock, steady_timeout_time) ==
+		    cv_status::no_timeout) {
+			return cv_status::no_timeout;
+		}
+
+		// We got a timeout against CLOCK_MONOTONIC but we need to check
+		// against the caller-supplied clock.
+		if (Clock::now() < timeout_time) {
+			return cv_status::no_timeout;
+		}
+
+		return cv_status::timeout;
 	}
 
 	// Overload that takes a predicate. This overload may be used to
@@ -165,7 +178,7 @@ class condition_variable {
 	{
 		while (!stop_waiting) {
 			if (wait_until(lock, timeout_time) ==
-			    std::cv_status::timeout)
+			    cv_status::timeout)
 				return stop_waiting();
 		}
 	}
@@ -176,6 +189,36 @@ class condition_variable {
 	native_handle_type native_handle()
 	{
 		return &c;
+	}
+
+    private:
+	template <class Duration>
+	cv_status
+	wait_until_impl(std::unique_lock<rtpi::mutex> &lock,
+			const std::chrono::time_point<std::chrono::steady_clock,
+						      Duration> &timeout_time)
+	{
+		auto s = std::chrono::time_point_cast<std::chrono::seconds>(
+			timeout_time);
+		auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+			timeout_time - s);
+
+		struct timespec ts = { static_cast<std::time_t>(
+					       s.time_since_epoch().count()),
+				       static_cast<long>(ns.count()) };
+
+		// pi_cond_timedwait uses CLOCK_MONOTONIC (steady_clock)
+		int e = pi_cond_timedwait(&c, lock.mutex()->native_handle(),
+					  &ts);
+
+		if (e == 0) {
+			return cv_status::no_timeout;
+		} else if (e == ETIMEDOUT) {
+			return cv_status::timeout;
+		} else {
+			throw std::system_error(
+				std::error_code(e, std::generic_category()));
+		}
 	}
 };
 
